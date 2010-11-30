@@ -3,8 +3,6 @@ require 'date'
 # CalendarHelper allows you to draw a databound calendar with fine-grained CSS formatting
 module CalendarHelper
 
-  VERSION = '0.2.2'
-
   # Returns an HTML calendar. In its simplest form, this method generates a plain
   # calendar (which can then be customized using CSS) for a given month and year.
   # However, this may be customized in a variety of ways -- changing the default CSS
@@ -15,7 +13,8 @@ module CalendarHelper
   #  :month # The month number to show the calendar for.
   # 
   # The following are optional, available for customizing the default behaviour:
-  #   :table_class       => "calendar"        # The class for the <table> tag.
+  #   :top_table_class       => "calendar_top"        # The class for the top <table> tag.
+  #   :bottom_table_class    => "calendar_bottom"        # The class for the bottom <table> tag.
   #   :month_name_class  => "monthName"       # The class for the name of the month, at the top of the table.
   #   :other_month_class => "otherMonth" # Not implemented yet.
   #   :day_name_class    => "dayName"         # The class is for the names of the weekdays, at the top.
@@ -46,8 +45,8 @@ module CalendarHelper
   # 
   # Example usage:
   #   calendar(:year => 2005, :month => 6) # This generates the simplest possible calendar.
-  #   calendar({:year => 2005, :month => 6, :table_class => "calendar_helper"}) # This generates a calendar, as
-  #                                                                             # before, but the <table>'s class
+  #   calendar({:year => 2005, :month => 6, :top_table_class => "calendar_helper"}) # This generates a calendar, as
+  #                                                                             # before, but the top <table>'s class
   #                                                                             # is set to "calendar_helper".
   #   calendar(:year => 2005, :month => 6, :abbrev => (0..-1)) # This generates a simple calendar but shows the
   #                                                            # entire day name ("Sunday", "Monday", etc.) instead
@@ -68,10 +67,9 @@ module CalendarHelper
     raise(ArgumentError, "No year given")  unless options.has_key?(:year)
     raise(ArgumentError, "No month given") unless options.has_key?(:month)
 
-    block                        ||= Proc.new {|d| nil}
-
     defaults = {
-      :table_class => 'calendar',
+      :top_table_class => 'top_calendar',
+      :bottom_table_class => 'bottom_calendar',
       :month_name_class => 'monthName',
       :other_month_class => 'otherMonth',
       :day_name_class => 'dayName',
@@ -85,9 +83,14 @@ module CalendarHelper
     }
     options = defaults.merge options
 
-    first = Date.civil(options[:year], options[:month], 1)
-    last = Date.civil(options[:year], options[:month], -1)
+    block                        ||= Proc.new {|d| nil}
 
+    html = calendar_top(options, &block)
+    html += calendar_bottom(options, &block)
+    html
+  end
+  
+  def calendar_top(options = {}, &block)
     first_weekday = first_day_of_week(options[:first_day_of_week])
     last_weekday = last_day_of_week(options[:first_day_of_week])
     
@@ -96,9 +99,8 @@ module CalendarHelper
       day_names.push(day_names.shift)
     end
 
-    # TODO Use some kind of builder instead of straight HTML
-    cal = %(<table class="#{options[:table_class]}" border="0" cellspacing="0" cellpadding="0">)
-    cal << %(<thead><tr>)
+    cal = %(<table class="calendar #{options[:top_table_class]}" border="0" cellspacing="0" cellpadding="0">)
+    cal << %(<thead><tr class="#{options[:month_name_class]}">)
     if options[:previous_month_text] or options[:next_month_text]
       cal << %(<th colspan="2">#{options[:previous_month_text]}</th>)
       colspan=3
@@ -110,25 +112,42 @@ module CalendarHelper
     cal << %(</tr><tr class="#{options[:day_name_class]}">)
     day_names.each do |d|
       unless d[options[:abbrev]].eql? d
-        cal << "<th scope='col'><abbr title='#{d}'>#{d[options[:abbrev]]}</abbr></th>"
+        cal << "<th scope=\"col\"><abbr title='#{d}'>#{d[options[:abbrev]]}</abbr></th>"
       else
-        cal << "<th scope='col'>#{d[options[:abbrev]]}</th>"
+        cal << "<th scope=\"col\">#{d[options[:abbrev]]}</th>"
       end
     end
-    cal << "</tr></thead><tbody><tr>"
+    cal << "</tr></thead></table>"
+  end
+
+  
+  def calendar_bottom(options = {}, &block)
+    first = Date.civil(options[:year], options[:month], 1)
+    last = Date.civil(options[:year], options[:month], -1)
+
+    first_weekday = first_day_of_week(options[:first_day_of_week])
+    last_weekday = last_day_of_week(options[:first_day_of_week])
+    
+    cal = %(<table class="calendar #{options[:bottom_table_class]}" border="0" cellspacing="0" cellpadding="0">)
+    cal << "<tbody><tr>"
     beginning_of_week(first, first_weekday).upto(first - 1) do |d|
-      cal << %(<td class="#{options[:other_month_class]})
+      cell_id = d.strftime("%Y%m%d")
+      cal << %(<td id="#{cell_id}" class="#{options[:other_month_class]})
       cal << " weekendDay" if weekend?(d)
+      cal << " #{Date::DAYNAMES[d.wday].downcase}"
       if options[:accessible]
         cal << %(">#{d.day}<span class="hidden"> #{Date::MONTHNAMES[d.month]}</span></td>)
       else
-        cal << %(">#{d.day}</td>)
+        cal << %(">#{block.call(d).first}</td>)
       end
     end unless first.wday == first_weekday
     first.upto(last) do |cur|
       cell_text, cell_attrs = block.call(cur)
       cell_text  ||= cur.mday
       cell_attrs ||= {:class => options[:day_class]}
+      
+      cell_attrs[:id] = cur.strftime("%Y%m%d")
+      cell_attrs[:class] += " #{Date::DAYNAMES[cur.wday].downcase}"
       cell_attrs[:class] += " weekendDay" if [0, 6].include?(cur.wday) 
       cell_attrs[:class] += " today" if (cur == Date.today) and options[:show_today]  
       cell_attrs = cell_attrs.map {|k, v| %(#{k}="#{v}") }.join(" ")
@@ -136,17 +155,17 @@ module CalendarHelper
       cal << "</tr><tr>" if cur.wday == last_weekday
     end
     (last + 1).upto(beginning_of_week(last + 7, first_weekday) - 1)  do |d|
-      cal << %(<td class="#{options[:other_month_class]})
+      cell_id = d.strftime("%Y%m%d")      
+      cal << %(<td id="#{cell_id}" class="#{options[:other_month_class]})
       cal << " weekendDay" if weekend?(d)
       if options[:accessible]
         cal << %(">#{d.day}<span class='hidden'> #{Date::MONTHNAMES[d.mon]}</span></td>)
       else
-        cal << %(">#{d.day}</td>)        
+        cal << %(">#{block.call(d).first}</td>)
       end
     end unless last.wday == last_weekday
     cal << "</tr></tbody></table>"
-  end
-  
+  end  
   private
   
   def first_day_of_week(day)
