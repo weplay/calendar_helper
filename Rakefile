@@ -15,10 +15,10 @@ Hoe.new('calendar_helper', CalendarHelper::VERSION) do |p|
   p.clean_globs = ['test/output']
 end
 
-# desc "Test task (actually runs specs)"
-# task "test" do
-#   system "spec --format specdoc --color spec/*_spec.rb"
-# end
+desc "Test task (actually runs specs)"
+task "test" do
+  system "spec --format specdoc --color spec/*_spec.rb"
+end
 
 # -- Rails-specific --
 
@@ -29,4 +29,18 @@ Rake::RDocTask.new(:rdoc) do |rdoc|
   rdoc.options << '--line-numbers' << '--inline-source'
   rdoc.rdoc_files.include('README')
   rdoc.rdoc_files.include('lib/**/*.rb')
+end
+
+begin
+  require 'jeweler'
+  Jeweler::Tasks.new do |gem|
+    gem.name = "calendar_helper"
+    gem.summary = %Q{Makes it easier to create atom feeds through Builder.}
+    gem.description = %Q{A simple method to create an HTML calendar for a single month. Can be styled with CSS. Usable with Ruby on Rails.}
+    gem.email = "boss AT topfunky.com"
+    gem.homepage = "http://rubyforge.org/projects/seattlerb"
+    gem.authors = ["Geoffrey Grosenbach"]
+  end
+rescue LoadError
+  puts "Jeweler (or a dependency) not available. Install it with: gem install jeweler"
 end
